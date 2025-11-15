@@ -170,6 +170,33 @@ export const addItem = (name: string, quantity: number = 1, category: string = '
 };
 
 /**
+ * Hàm thêm item mới với trạng thái bought tùy chỉnh (dùng cho import API)
+ */
+export const addItemWithStatus = (
+  name: string, 
+  quantity: number = 1, 
+  category: string = '', 
+  bought: number = 0
+): boolean => {
+  try {
+    const currentTime = Date.now();
+    const stmt = db.prepareSync(
+      'INSERT INTO grocery_items (name, quantity, category, bought, created_at) VALUES (?, ?, ?, ?, ?);'
+    );
+    try {
+      stmt.executeSync([name, quantity, category, bought, currentTime]);
+      console.log(`✅ Đã thêm item: ${name} (bought: ${bought})`);
+      return true;
+    } finally {
+      stmt.finalizeSync();
+    }
+  } catch (error) {
+    console.error('❌ Error adding item with status:', error);
+    return false;
+  }
+};
+
+/**
  * Hàm toggle trạng thái bought của item (0 <-> 1)
  */
 export const toggleItemBought = (id: number): boolean => {

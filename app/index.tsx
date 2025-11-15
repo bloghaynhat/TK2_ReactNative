@@ -1,6 +1,7 @@
-import { addItem, deleteItem, getAllItems, toggleItemBought, updateItem, type GroceryItem } from "@/service/db";
+import { addItem, addItemWithStatus, deleteItem, getAllItems, toggleItemBought, updateItem, type GroceryItem } from "@/service/db";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   KeyboardAvoidingView,
@@ -17,6 +18,7 @@ export default function Index() {
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [newItemQuantity, setNewItemQuantity] = useState('1');
@@ -195,6 +197,90 @@ export default function Index() {
     );
   };
 
+  const handleImportFromAPI = async () => {
+    setImporting(true);
+    
+    try {
+      console.log('🌐 Fetching data from API...');
+      
+      // Sample API endpoint - using JSONPlaceholder for demo
+      const response = await fetch('https://dummyjson.com/todos?limit=10');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('✅ API data received:', data);
+      
+      // Get existing items to check for duplicates
+      const existingItems = getAllItems();
+      const existingNames = new Set(existingItems.map(item => item.name.toLowerCase()));
+      
+      let importedCount = 0;
+      let skippedCount = 0;
+      
+      // Process API data
+      if (data.todos && Array.isArray(data.todos)) {
+        for (const apiItem of data.todos) {
+          // Map API fields to our schema
+          const itemName = apiItem.todo || 'Món không có tên';
+          const normalizedName = itemName.toLowerCase();
+          
+          // Skip if name already exists
+          if (existingNames.has(normalizedName)) {
+            console.log(`⏭️ Skipping duplicate: ${itemName}`);
+            skippedCount++;
+            continue;
+          }
+          
+          // Map completed to bought (true -> 1, false -> 0)
+          const bought = apiItem.completed ? 1 : 0;
+          const quantity = 1; // Default quantity
+          const category = 'Import từ API';
+          
+          // Add to database with bought status from API
+          const success = addItemWithStatus(itemName, quantity, category, bought);
+          
+          if (success) {
+            importedCount++;
+            existingNames.add(normalizedName); // Update set for next iterations
+          }
+        }
+      }
+      
+      // Reload data to show new items
+      loadData();
+      
+      // Show result
+      if (importedCount > 0) {
+        Alert.alert(
+          'Import thành công! 🎉',
+          `Đã thêm ${importedCount} món mới${skippedCount > 0 ? `\nBỏ qua ${skippedCount} món trùng lặp` : ''}`,
+          [{ text: 'OK' }]
+        );
+      } else if (skippedCount > 0) {
+        Alert.alert(
+          'Không có món mới',
+          `Tất cả ${skippedCount} món từ API đã tồn tại trong danh sách`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Thông báo', 'Không có dữ liệu để import', [{ text: 'OK' }]);
+      }
+      
+    } catch (error) {
+      console.error('❌ Import error:', error);
+      Alert.alert(
+        'Lỗi khi import',
+        `Không thể lấy dữ liệu từ API: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
+        [{ text: 'Đóng' }]
+      );
+    } finally {
+      setImporting(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -272,7 +358,24 @@ export default function Index() {
   const renderHeader = () => (
     <View style={styles.header}>
       <Text style={styles.title}>🛒 Grocery App</Text>
-      <Text style={styles.subtitle}>Câu 8: Tìm kiếm/Filter real-time</Text>
+      <Text style={styles.subtitle}>Câu 9: Fetch API & Đồng bộ "Import once"</Text>
+
+      {/* Import from API Button */}
+      <TouchableOpacity 
+        style={[styles.importButton, importing && styles.importButtonDisabled]}
+        onPress={handleImportFromAPI}
+        disabled={importing}
+        activeOpacity={0.7}
+      >
+        {importing ? (
+          <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+        ) : (
+          <Text style={styles.importButtonIcon}>🌐</Text>
+        )}
+        <Text style={styles.importButtonText}>
+          {importing ? 'Đang import...' : 'Import từ API'}
+        </Text>
+      </TouchableOpacity>
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -523,6 +626,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 16,
+  },
+  // Import Button Styles
+  importButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  importButtonDisabled: {
+    backgroundColor: '#9E9E9E',
+    opacity: 0.6,
+  },
+  importButtonIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  importButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   // Search Bar Styles
   searchContainer: {
