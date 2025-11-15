@@ -11,7 +11,7 @@ export default function Index() {
     if (isConnected) {
       setDbStatus('✅ Database connected successfully!');
     } else {
-      setDbStatus('❌ Database connection failed');
+      setDbStatus('❌ Database connection faileds');
     }
   }, []);
 
