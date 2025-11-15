@@ -191,6 +191,27 @@ export const toggleItemBought = (id: number): boolean => {
 };
 
 /**
+ * Hàm cập nhật thông tin item
+ */
+export const updateItem = (id: number, name: string, quantity: number, category: string): boolean => {
+  try {
+    const stmt = db.prepareSync(
+      'UPDATE grocery_items SET name = ?, quantity = ?, category = ? WHERE id = ?;'
+    );
+    try {
+      stmt.executeSync([name, quantity, category, id]);
+      console.log(`✅ Đã cập nhật item id ${id}: ${name}`);
+      return true;
+    } finally {
+      stmt.finalizeSync();
+    }
+  } catch (error) {
+    console.error('❌ Error updating item:', error);
+    return false;
+  }
+};
+
+/**
  * Hàm xóa tất cả items (chỉ dùng cho testing)
  */
 export const clearAllItems = () => {

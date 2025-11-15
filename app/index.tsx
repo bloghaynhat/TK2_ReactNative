@@ -1,4 +1,4 @@
-import { addItem, getAllItems, toggleItemBought, type GroceryItem } from "@/service/db";
+import { addItem, getAllItems, toggleItemBought, updateItem, type GroceryItem } from "@/service/db";
 import { useEffect, useState } from "react";
 import {
   Alert,
@@ -21,6 +21,14 @@ export default function Index() {
   const [newItemQuantity, setNewItemQuantity] = useState('1');
   const [newItemCategory, setNewItemCategory] = useState('');
   const [nameError, setNameError] = useState('');
+  
+  // Edit Modal state
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
+  const [editItemName, setEditItemName] = useState('');
+  const [editItemQuantity, setEditItemQuantity] = useState('1');
+  const [editItemCategory, setEditItemCategory] = useState('');
+  const [editNameError, setEditNameError] = useState('');
 
   const loadData = () => {
     // Lấy tất cả items từ database
@@ -94,6 +102,57 @@ export default function Index() {
     }
   };
 
+  const handleOpenEditModal = (item: GroceryItem) => {
+    setEditingItem(item);
+    setEditItemName(item.name);
+    setEditItemQuantity(item.quantity.toString());
+    setEditItemCategory(item.category || '');
+    setEditNameError('');
+    setEditModalVisible(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setEditModalVisible(false);
+    setEditingItem(null);
+    setEditNameError('');
+  };
+
+  const handleUpdateItem = () => {
+    if (!editingItem) return;
+
+    // Validate name
+    if (!editItemName.trim()) {
+      setEditNameError('Tên món không được để trống!');
+      Alert.alert('Lỗi', 'Vui lòng nhập tên món cần mua!');
+      return;
+    }
+
+    // Parse quantity
+    const quantity = parseInt(editItemQuantity) || 1;
+
+    // Update in database
+    const success = updateItem(editingItem.id, editItemName.trim(), quantity, editItemCategory.trim());
+
+    if (success) {
+      // Reset form
+      setEditItemName('');
+      setEditItemQuantity('1');
+      setEditItemCategory('');
+      setEditNameError('');
+      setEditingItem(null);
+      
+      // Close modal
+      setEditModalVisible(false);
+      
+      // Reload data
+      loadData();
+      
+      Alert.alert('Thành công', `Đã cập nhật "${editItemName}"!`);
+    } else {
+      Alert.alert('Lỗi', 'Không thể cập nhật món. Vui lòng thử lại!');
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -132,7 +191,18 @@ export default function Index() {
         </View>
       </View>
       
-      <Text style={styles.tapHint}>👆 Chạm để đánh dấu</Text>
+      <View style={styles.itemActions}>
+        <Text style={styles.tapHint}>👆 Chạm để đánh dấu</Text>
+        <TouchableOpacity 
+          style={styles.editButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleOpenEditModal(item);
+          }}
+        >
+          <Text style={styles.editButtonText}>✏️ Sửa</Text>
+        </TouchableOpacity>
+      </View>
     </TouchableOpacity>
   );
 
@@ -149,7 +219,7 @@ export default function Index() {
   const renderHeader = () => (
     <View style={styles.header}>
       <Text style={styles.title}>🛒 Grocery App</Text>
-      <Text style={styles.subtitle}>Câu 5: Đánh dấu đã mua (Toggle)</Text>
+      <Text style={styles.subtitle}>Câu 6: Sửa món (EDIT)</Text>
       <Text style={styles.itemCount}>
         {items.length > 0 ? `Có ${items.length} món cần mua` : 'Chưa có món nào'}
       </Text>
@@ -249,6 +319,84 @@ export default function Index() {
                   onPress={handleAddItem}
                 >
                   <Text style={styles.saveButtonText}>Lưu</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Edit Item Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={editModalVisible}
+        onRequestClose={handleCloseEditModal}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>✏️ Sửa món</Text>
+                <TouchableOpacity onPress={handleCloseEditModal}>
+                  <Text style={styles.closeButton}>×</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Form Fields */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Tên món <Text style={styles.required}>*</Text></Text>
+                <TextInput
+                  style={[styles.input, editNameError ? styles.inputError : null]}
+                  placeholder="Ví dụ: Sữa, Trứng, Bánh mì..."
+                  value={editItemName}
+                  onChangeText={(text) => {
+                    setEditItemName(text);
+                    if (editNameError) setEditNameError('');
+                  }}
+                  autoFocus
+                />
+                {editNameError ? <Text style={styles.errorText}>{editNameError}</Text> : null}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Số lượng</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="1"
+                  value={editItemQuantity}
+                  onChangeText={setEditItemQuantity}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Danh mục (tùy chọn)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ví dụ: Thực phẩm, Đồ uống..."
+                  value={editItemCategory}
+                  onChangeText={setEditItemCategory}
+                />
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.modalActions}>
+                <TouchableOpacity 
+                  style={[styles.button, styles.cancelButton]}
+                  onPress={handleCloseEditModal}
+                >
+                  <Text style={styles.cancelButtonText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.button, styles.saveButton]}
+                  onPress={handleUpdateItem}
+                >
+                  <Text style={styles.saveButtonText}>Cập nhật</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -357,12 +505,28 @@ const styles = StyleSheet.create({
   textMuted: {
     color: '#999',
   },
+  itemActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
   tapHint: {
     fontSize: 11,
     color: '#bbb',
-    textAlign: 'center',
-    marginTop: 8,
     fontStyle: 'italic',
+    flex: 1,
+  },
+  editButton: {
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  editButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
   },
   // Empty State Styles
   emptyContainer: {
