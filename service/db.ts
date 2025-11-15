@@ -130,6 +130,20 @@ export const getAllItems = (): GroceryItem[] => {
   }
 };
 
+/**
+ * Hàm xóa tất cả items (chỉ dùng cho testing)
+ */
+export const clearAllItems = () => {
+  try {
+    db.runSync('DELETE FROM grocery_items;');
+    console.log('🗑️ Đã xóa tất cả items');
+    return true;
+  } catch (error) {
+    console.error('❌ Error clearing items:', error);
+    return false;
+  }
+};
+
 // Export database instance để sử dụng ở nơi khác
 export { db };
 
