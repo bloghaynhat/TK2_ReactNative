@@ -46,35 +46,37 @@ export const initDatabase = () => {
 export const seedData = () => {
   try {
     // Kiểm tra xem bảng có dữ liệu chưa
-    const result = db.getAllSync('SELECT COUNT(*) as count FROM grocery_items;') as Array<{ count: number }>;
-    const count = result[0]?.count || 0;
+    const countStmt = db.prepareSync('SELECT COUNT(*) as count FROM grocery_items;');
+    try {
+      const result = countStmt.executeSync<{ count: number }>().getAllSync();
+      const count = result[0]?.count || 0;
 
-    if (count === 0) {
-      console.log('📦 Bảng đang trống, đang seed dữ liệu mẫu...');
-      
-      const currentTime = Date.now();
-      
-      // Thêm 3 bản ghi mẫu
-      db.runSync(
-        'INSERT INTO grocery_items (name, quantity, category, bought, created_at) VALUES (?, ?, ?, ?, ?);',
-        ['Sữa', 2, 'Đồ uống', 0, currentTime]
-      );
-      
-      db.runSync(
-        'INSERT INTO grocery_items (name, quantity, category, bought, created_at) VALUES (?, ?, ?, ?, ?);',
-        ['Trứng', 10, 'Thực phẩm', 0, currentTime]
-      );
-      
-      db.runSync(
-        'INSERT INTO grocery_items (name, quantity, category, bought, created_at) VALUES (?, ?, ?, ?, ?);',
-        ['Bánh mì', 1, 'Thực phẩm', 0, currentTime]
-      );
-      
-      console.log('✅ Đã seed 3 bản ghi mẫu thành công!');
-      return true;
-    } else {
-      console.log(`ℹ️ Bảng đã có ${count} bản ghi, không cần seed.`);
-      return false;
+      if (count === 0) {
+        console.log('📦 Bảng đang trống, đang seed dữ liệu mẫu...');
+        
+        const currentTime = Date.now();
+        
+        const insertStmt = db.prepareSync(
+          'INSERT INTO grocery_items (name, quantity, category, bought, created_at) VALUES (?, ?, ?, ?, ?);'
+        );
+        
+        try {
+          // Thêm 3 bản ghi mẫu
+          insertStmt.executeSync(['Sữa', 2, 'Đồ uống', 0, currentTime]);
+          insertStmt.executeSync(['Trứng', 10, 'Thực phẩm', 0, currentTime]);
+          insertStmt.executeSync(['Bánh mì', 1, 'Thực phẩm', 0, currentTime]);
+          
+          console.log('✅ Đã seed 3 bản ghi mẫu thành công!');
+          return true;
+        } finally {
+          insertStmt.finalizeSync();
+        }
+      } else {
+        console.log(`ℹ️ Bảng đã có ${count} bản ghi, không cần seed.`);
+        return false;
+      }
+    } finally {
+      countStmt.finalizeSync();
     }
   } catch (error) {
     console.error('❌ Error seeding data:', error);
@@ -88,15 +90,20 @@ export const seedData = () => {
  */
 export const checkConnection = () => {
   try {
-    const result = db.getAllSync(
+    const stmt = db.prepareSync(
       'SELECT name FROM sqlite_master WHERE type="table" AND name="grocery_items";'
     );
-    if (result.length > 0) {
-      console.log('✅ DB Check: Bảng grocery_items đã tồn tại.');
-      return true;
-    } else {
-      console.log('⚠️ DB Check: Bảng grocery_items chưa tồn tại.');
-      return false;
+    try {
+      const result = stmt.executeSync().getAllSync();
+      if (result.length > 0) {
+        console.log('✅ DB Check: Bảng grocery_items đã tồn tại.');
+        return true;
+      } else {
+        console.log('⚠️ DB Check: Bảng grocery_items chưa tồn tại.');
+        return false;
+      }
+    } finally {
+      stmt.finalizeSync();
     }
   } catch (error) {
     console.error('❌ DB Check Error:', error);
@@ -109,8 +116,13 @@ export const checkConnection = () => {
  */
 export const getItemCount = (): number => {
   try {
-    const result = db.getAllSync('SELECT COUNT(*) as count FROM grocery_items;') as Array<{ count: number }>;
-    return result[0]?.count || 0;
+    const stmt = db.prepareSync('SELECT COUNT(*) as count FROM grocery_items;');
+    try {
+      const result = stmt.executeSync<{ count: number }>().getAllSync();
+      return result[0]?.count || 0;
+    } finally {
+      stmt.finalizeSync();
+    }
   } catch (error) {
     console.error('❌ Error counting items:', error);
     return 0;
@@ -122,11 +134,38 @@ export const getItemCount = (): number => {
  */
 export const getAllItems = (): GroceryItem[] => {
   try {
-    const result = db.getAllSync('SELECT * FROM grocery_items ORDER BY created_at DESC;') as GroceryItem[];
-    return result;
+    const stmt = db.prepareSync('SELECT * FROM grocery_items ORDER BY created_at DESC;');
+    try {
+      const result = stmt.executeSync<GroceryItem>().getAllSync();
+      return result;
+    } finally {
+      stmt.finalizeSync();
+    }
   } catch (error) {
     console.error('❌ Error getting all items:', error);
     return [];
+  }
+};
+
+/**
+ * Hàm thêm item mới vào bảng
+ */
+export const addItem = (name: string, quantity: number = 1, category: string = ''): boolean => {
+  try {
+    const currentTime = Date.now();
+    const stmt = db.prepareSync(
+      'INSERT INTO grocery_items (name, quantity, category, bought, created_at) VALUES (?, ?, ?, ?, ?);'
+    );
+    try {
+      stmt.executeSync([name, quantity, category, 0, currentTime]);
+      console.log(`✅ Đã thêm item: ${name}`);
+      return true;
+    } finally {
+      stmt.finalizeSync();
+    }
+  } catch (error) {
+    console.error('❌ Error adding item:', error);
+    return false;
   }
 };
 
@@ -135,7 +174,7 @@ export const getAllItems = (): GroceryItem[] => {
  */
 export const clearAllItems = () => {
   try {
-    db.runSync('DELETE FROM grocery_items;');
+    db.execSync('DELETE FROM grocery_items;');
     console.log('🗑️ Đã xóa tất cả items');
     return true;
   } catch (error) {

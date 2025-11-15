@@ -1,10 +1,26 @@
-import { getAllItems, type GroceryItem } from "@/service/db";
+import { getAllItems, addItem, type GroceryItem } from "@/service/db";
 import { useEffect, useState } from "react";
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import { 
+  FlatList, 
+  StyleSheet, 
+  Text, 
+  View, 
+  TouchableOpacity, 
+  Modal, 
+  TextInput, 
+  Alert,
+  KeyboardAvoidingView,
+  Platform
+} from "react-native";
 
 export default function Index() {
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemQuantity, setNewItemQuantity] = useState('1');
+  const [newItemCategory, setNewItemCategory] = useState('');
+  const [nameError, setNameError] = useState('');
 
   const loadData = () => {
     // Lấy tất cả items từ database
@@ -17,6 +33,52 @@ export default function Index() {
     setRefreshing(true);
     loadData();
     setRefreshing(false);
+  };
+
+  const handleAddItem = () => {
+    // Validate name
+    if (!newItemName.trim()) {
+      setNameError('Tên món không được để trống!');
+      Alert.alert('Lỗi', 'Vui lòng nhập tên món cần mua!');
+      return;
+    }
+
+    // Parse quantity
+    const quantity = parseInt(newItemQuantity) || 1;
+
+    // Add to database
+    const success = addItem(newItemName.trim(), quantity, newItemCategory.trim());
+
+    if (success) {
+      // Reset form
+      setNewItemName('');
+      setNewItemQuantity('1');
+      setNewItemCategory('');
+      setNameError('');
+      
+      // Close modal
+      setModalVisible(false);
+      
+      // Reload data
+      loadData();
+      
+      Alert.alert('Thành công', `Đã thêm "${newItemName}" vào danh sách!`);
+    } else {
+      Alert.alert('Lỗi', 'Không thể thêm món mới. Vui lòng thử lại!');
+    }
+  };
+
+  const handleOpenModal = () => {
+    setNewItemName('');
+    setNewItemQuantity('1');
+    setNewItemCategory('');
+    setNameError('');
+    setModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setNameError('');
   };
 
   useEffect(() => {
@@ -61,7 +123,7 @@ export default function Index() {
   const renderHeader = () => (
     <View style={styles.header}>
       <Text style={styles.title}>🛒 Grocery App</Text>
-      <Text style={styles.subtitle}>Câu 3: Màn hình danh sách</Text>
+      <Text style={styles.subtitle}>Câu 4: Thêm mới bằng Modal</Text>
       <Text style={styles.itemCount}>
         {items.length > 0 ? `Có ${items.length} món cần mua` : 'Chưa có món nào'}
       </Text>
@@ -80,6 +142,93 @@ export default function Index() {
         refreshing={refreshing}
         onRefresh={onRefresh}
       />
+
+      {/* Floating Add Button */}
+      <TouchableOpacity 
+        style={styles.fabButton}
+        onPress={handleOpenModal}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.fabButtonText}>+</Text>
+      </TouchableOpacity>
+
+      {/* Add Item Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={handleCloseModal}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>➕ Thêm món mới</Text>
+                <TouchableOpacity onPress={handleCloseModal}>
+                  <Text style={styles.closeButton}>×</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Form Fields */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Tên món <Text style={styles.required}>*</Text></Text>
+                <TextInput
+                  style={[styles.input, nameError ? styles.inputError : null]}
+                  placeholder="Ví dụ: Sữa, Trứng, Bánh mì..."
+                  value={newItemName}
+                  onChangeText={(text) => {
+                    setNewItemName(text);
+                    if (nameError) setNameError('');
+                  }}
+                  autoFocus
+                />
+                {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Số lượng</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="1"
+                  value={newItemQuantity}
+                  onChangeText={setNewItemQuantity}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Danh mục (tùy chọn)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ví dụ: Thực phẩm, Đồ uống..."
+                  value={newItemCategory}
+                  onChangeText={setNewItemCategory}
+                />
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.modalActions}>
+                <TouchableOpacity 
+                  style={[styles.button, styles.cancelButton]}
+                  onPress={handleCloseModal}
+                >
+                  <Text style={styles.cancelButtonText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.button, styles.saveButton]}
+                  onPress={handleAddItem}
+                >
+                  <Text style={styles.saveButtonText}>Lưu</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -191,5 +340,121 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#999',
     textAlign: 'center',
+  },
+  // Floating Action Button
+  fabButton: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#2196F3',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  fabButtonText: {
+    fontSize: 32,
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  closeButton: {
+    fontSize: 36,
+    color: '#999',
+    fontWeight: '300',
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  required: {
+    color: '#F44336',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: '#f9f9f9',
+  },
+  inputError: {
+    borderColor: '#F44336',
+    backgroundColor: '#FFEBEE',
+  },
+  errorText: {
+    color: '#F44336',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    gap: 12,
+  },
+  button: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f5f5f5',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  saveButton: {
+    backgroundColor: '#2196F3',
+  },
+  saveButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
