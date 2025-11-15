@@ -1,5 +1,5 @@
 import { addItem, deleteItem, getAllItems, toggleItemBought, updateItem, type GroceryItem } from "@/service/db";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -15,6 +15,7 @@ import {
 
 export default function Index() {
   const [items, setItems] = useState<GroceryItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [newItemName, setNewItemName] = useState('');
@@ -37,11 +38,24 @@ export default function Index() {
     console.log(`📱 Loaded ${allItems.length} items from database`);
   };
 
-  const onRefresh = () => {
+  // Filter items based on search query using useMemo for performance
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return items;
+    }
+    
+    const query = searchQuery.toLowerCase().trim();
+    return items.filter(item => 
+      item.name.toLowerCase().includes(query) ||
+      item.category.toLowerCase().includes(query)
+    );
+  }, [items, searchQuery]);
+
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadData();
     setRefreshing(false);
-  };
+  }, []);
 
   const handleAddItem = () => {
     // Validate name
@@ -258,9 +272,39 @@ export default function Index() {
   const renderHeader = () => (
     <View style={styles.header}>
       <Text style={styles.title}>🛒 Grocery App</Text>
-      <Text style={styles.subtitle}>Câu 7: Xóa món (DELETE)</Text>
+      <Text style={styles.subtitle}>Câu 8: Tìm kiếm/Filter real-time</Text>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Tìm kiếm theo tên hoặc loại..."
+          placeholderTextColor="#999"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity 
+            onPress={() => setSearchQuery('')}
+            style={styles.clearButton}
+          >
+            <Text style={styles.clearButtonText}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Search Results Counter */}
+      {searchQuery.length > 0 && (
+        <Text style={styles.searchResultText}>
+          Tìm thấy {filteredItems.length} kết quả
+        </Text>
+      )}
+
       <Text style={styles.itemCount}>
-        {items.length > 0 ? `Có ${items.length} món cần mua` : 'Chưa có món nào'}
+        {filteredItems.length > 0 ? `Có ${filteredItems.length} món` : 'Chưa có món nào'}
       </Text>
     </View>
   );
@@ -268,11 +312,21 @@ export default function Index() {
   return (
     <View style={styles.container}>
       <FlatList
-        data={items}
+        data={filteredItems}
         renderItem={renderItem}
         keyExtractor={(item) => item.id.toString()}
         ListHeaderComponent={renderHeader}
-        ListEmptyComponent={renderEmptyState}
+        ListEmptyComponent={() => (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>{searchQuery ? '🔍' : '🛒'}</Text>
+            <Text style={styles.emptyTitle}>
+              {searchQuery ? 'Không tìm thấy kết quả' : 'Danh sách trống'}
+            </Text>
+            <Text style={styles.emptyMessage}>
+              {searchQuery ? `Không có món nào chứa "${searchQuery}"` : 'Thêm món cần mua nhé!'}
+            </Text>
+          </View>
+        )}
         contentContainerStyle={styles.listContent}
         refreshing={refreshing}
         onRefresh={onRefresh}
@@ -466,9 +520,49 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
-    marginBottom: 10,
+    marginBottom: 16,
+  },
+  // Search Bar Styles
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  searchIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    padding: 0,
+  },
+  clearButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  clearButtonText: {
+    fontSize: 20,
+    color: '#999',
+    fontWeight: 'bold',
+  },
+  searchResultText: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 8,
+    fontStyle: 'italic',
   },
   itemCount: {
     fontSize: 14,
