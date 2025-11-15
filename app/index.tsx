@@ -1,4 +1,4 @@
-import { addItem, getAllItems, toggleItemBought, updateItem, type GroceryItem } from "@/service/db";
+import { addItem, deleteItem, getAllItems, toggleItemBought, updateItem, type GroceryItem } from "@/service/db";
 import { useEffect, useState } from "react";
 import {
   Alert,
@@ -153,6 +153,34 @@ export default function Index() {
     }
   };
 
+  const handleDeleteItem = (id: number, name: string) => {
+    Alert.alert(
+      'Xác nhận xóa',
+      `Bạn có chắc chắn muốn xóa "${name}" không?`,
+      [
+        {
+          text: 'Hủy',
+          style: 'cancel',
+        },
+        {
+          text: 'Xóa',
+          style: 'destructive',
+          onPress: () => {
+            const success = deleteItem(id);
+            if (success) {
+              // Reload data
+              loadData();
+              Alert.alert('Thành công', `Đã xóa "${name}"!`);
+            } else {
+              Alert.alert('Lỗi', 'Không thể xóa món. Vui lòng thử lại!');
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -193,15 +221,26 @@ export default function Index() {
       
       <View style={styles.itemActions}>
         <Text style={styles.tapHint}>👆 Chạm để đánh dấu</Text>
-        <TouchableOpacity 
-          style={styles.editButton}
-          onPress={(e) => {
-            e.stopPropagation();
-            handleOpenEditModal(item);
-          }}
-        >
-          <Text style={styles.editButtonText}>✏️ Sửa</Text>
-        </TouchableOpacity>
+        <View style={styles.buttonGroup}>
+          <TouchableOpacity 
+            style={styles.editButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleOpenEditModal(item);
+            }}
+          >
+            <Text style={styles.editButtonText}>✏️ Sửa</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.deleteButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDeleteItem(item.id, item.name);
+            }}
+          >
+            <Text style={styles.deleteButtonText}>🗑️ Xóa</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -219,7 +258,7 @@ export default function Index() {
   const renderHeader = () => (
     <View style={styles.header}>
       <Text style={styles.title}>🛒 Grocery App</Text>
-      <Text style={styles.subtitle}>Câu 6: Sửa món (EDIT)</Text>
+      <Text style={styles.subtitle}>Câu 7: Xóa món (DELETE)</Text>
       <Text style={styles.itemCount}>
         {items.length > 0 ? `Có ${items.length} món cần mua` : 'Chưa có món nào'}
       </Text>
@@ -517,6 +556,10 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     flex: 1,
   },
+  buttonGroup: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   editButton: {
     backgroundColor: '#FF9800',
     paddingHorizontal: 12,
@@ -524,6 +567,17 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   editButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    backgroundColor: '#F44336',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  deleteButtonText: {
     color: 'white',
     fontSize: 12,
     fontWeight: '600',

@@ -212,6 +212,25 @@ export const updateItem = (id: number, name: string, quantity: number, category:
 };
 
 /**
+ * Hàm xóa một item theo id
+ */
+export const deleteItem = (id: number): boolean => {
+  try {
+    const stmt = db.prepareSync('DELETE FROM grocery_items WHERE id = ?;');
+    try {
+      stmt.executeSync([id]);
+      console.log(`✅ Đã xóa item id: ${id}`);
+      return true;
+    } finally {
+      stmt.finalizeSync();
+    }
+  } catch (error) {
+    console.error('❌ Error deleting item:', error);
+    return false;
+  }
+};
+
+/**
  * Hàm xóa tất cả items (chỉ dùng cho testing)
  */
 export const clearAllItems = () => {
