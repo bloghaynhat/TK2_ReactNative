@@ -1,24 +1,30 @@
-import { addItem, addItemWithStatus, deleteItem, getAllItems, toggleItemBought, updateItem, type GroceryItem } from "@/service/db";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
-} from "react-native";
+import { AddItemModal } from "@/components/AddItemModal";
+import { EditItemModal } from "@/components/EditItemModal";
+import { EmptyState } from "@/components/EmptyState";
+import { GroceryItem } from "@/components/GroceryItem";
+import { ListHeader } from "@/components/ListHeader";
+import { useGroceryItems } from "@/hooks/useGroceryItems";
+import type { GroceryItem as GroceryItemType } from "@/service/db";
+import { useState } from "react";
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function Index() {
-  const [items, setItems] = useState<GroceryItem[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
-  const [importing, setImporting] = useState(false);
+  // Use custom hook for grocery items logic
+  const {
+    filteredItems,
+    searchQuery,
+    setSearchQuery,
+    refreshing,
+    importing,
+    onRefresh,
+    handleAddItem: addItemToDb,
+    handleToggleBought,
+    handleUpdateItem: updateItemInDb,
+    handleDeleteItem,
+    handleImportFromAPI,
+  } = useGroceryItems();
+
+  // Modal states
   const [modalVisible, setModalVisible] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [newItemQuantity, setNewItemQuantity] = useState('1');
@@ -27,51 +33,24 @@ export default function Index() {
   
   // Edit Modal state
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
+  const [editingItem, setEditingItem] = useState<GroceryItemType | null>(null);
   const [editItemName, setEditItemName] = useState('');
   const [editItemQuantity, setEditItemQuantity] = useState('1');
   const [editItemCategory, setEditItemCategory] = useState('');
   const [editNameError, setEditNameError] = useState('');
 
-  const loadData = () => {
-    // Lấy tất cả items từ database
-    const allItems = getAllItems();
-    setItems(allItems);
-    console.log(`📱 Loaded ${allItems.length} items from database`);
-  };
-
-  // Filter items based on search query using useMemo for performance
-  const filteredItems = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return items;
-    }
-    
-    const query = searchQuery.toLowerCase().trim();
-    return items.filter(item => 
-      item.name.toLowerCase().includes(query) ||
-      item.category.toLowerCase().includes(query)
-    );
-  }, [items, searchQuery]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadData();
-    setRefreshing(false);
-  }, []);
-
   const handleAddItem = () => {
     // Validate name
     if (!newItemName.trim()) {
       setNameError('Tên món không được để trống!');
-      Alert.alert('Lỗi', 'Vui lòng nhập tên món cần mua!');
       return;
     }
 
     // Parse quantity
     const quantity = parseInt(newItemQuantity) || 1;
 
-    // Add to database
-    const success = addItem(newItemName.trim(), quantity, newItemCategory.trim());
+    // Add to database using hook
+    const success = addItemToDb(newItemName.trim(), quantity, newItemCategory.trim());
 
     if (success) {
       // Reset form
@@ -82,13 +61,6 @@ export default function Index() {
       
       // Close modal
       setModalVisible(false);
-      
-      // Reload data
-      loadData();
-      
-      Alert.alert('Thành công', `Đã thêm "${newItemName}" vào danh sách!`);
-    } else {
-      Alert.alert('Lỗi', 'Không thể thêm món mới. Vui lòng thử lại!');
     }
   };
 
@@ -105,20 +77,9 @@ export default function Index() {
     setNameError('');
   };
 
-  const handleToggleBought = (id: number, name: string, currentBought: number) => {
-    const success = toggleItemBought(id);
-    if (success) {
-      // Cập nhật state ngay lập tức để UI mượt mà
-      setItems(prevItems => 
-        prevItems.map(item => 
-          item.id === id ? { ...item, bought: item.bought === 0 ? 1 : 0 } : item
-        )
-      );
-      console.log(`🔄 Toggle ${name}: ${currentBought === 0 ? 'Chưa mua → Đã mua' : 'Đã mua → Chưa mua'}`);
-    }
-  };
 
-  const handleOpenEditModal = (item: GroceryItem) => {
+
+  const handleOpenEditModal = (item: GroceryItemType) => {
     setEditingItem(item);
     setEditItemName(item.name);
     setEditItemQuantity(item.quantity.toString());
@@ -139,15 +100,14 @@ export default function Index() {
     // Validate name
     if (!editItemName.trim()) {
       setEditNameError('Tên món không được để trống!');
-      Alert.alert('Lỗi', 'Vui lòng nhập tên món cần mua!');
       return;
     }
 
     // Parse quantity
     const quantity = parseInt(editItemQuantity) || 1;
 
-    // Update in database
-    const success = updateItem(editingItem.id, editItemName.trim(), quantity, editItemCategory.trim());
+    // Update in database using hook
+    const success = updateItemInDb(editingItem.id, editItemName.trim(), quantity, editItemCategory.trim());
 
     if (success) {
       // Reset form
@@ -159,277 +119,34 @@ export default function Index() {
       
       // Close modal
       setEditModalVisible(false);
-      
-      // Reload data
-      loadData();
-      
-      Alert.alert('Thành công', `Đã cập nhật "${editItemName}"!`);
-    } else {
-      Alert.alert('Lỗi', 'Không thể cập nhật món. Vui lòng thử lại!');
     }
   };
 
-  const handleDeleteItem = (id: number, name: string) => {
-    Alert.alert(
-      'Xác nhận xóa',
-      `Bạn có chắc chắn muốn xóa "${name}" không?`,
-      [
-        {
-          text: 'Hủy',
-          style: 'cancel',
-        },
-        {
-          text: 'Xóa',
-          style: 'destructive',
-          onPress: () => {
-            const success = deleteItem(id);
-            if (success) {
-              // Reload data
-              loadData();
-              Alert.alert('Thành công', `Đã xóa "${name}"!`);
-            } else {
-              Alert.alert('Lỗi', 'Không thể xóa món. Vui lòng thử lại!');
-            }
-          },
-        },
-      ],
-      { cancelable: true }
-    );
-  };
 
-  const handleImportFromAPI = async () => {
-    setImporting(true);
-    
-    try {
-      console.log('🌐 Fetching data from API...');
-      
-      // Sample API endpoint - using JSONPlaceholder for demo
-      const response = await fetch('https://dummyjson.com/todos?limit=10');
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log('✅ API data received:', data);
-      
-      // Get existing items to check for duplicates
-      const existingItems = getAllItems();
-      const existingNames = new Set(existingItems.map(item => item.name.toLowerCase()));
-      
-      let importedCount = 0;
-      let skippedCount = 0;
-      
-      // Process API data
-      if (data.todos && Array.isArray(data.todos)) {
-        for (const apiItem of data.todos) {
-          // Map API fields to our schema
-          const itemName = apiItem.todo || 'Món không có tên';
-          const normalizedName = itemName.toLowerCase();
-          
-          // Skip if name already exists
-          if (existingNames.has(normalizedName)) {
-            console.log(`⏭️ Skipping duplicate: ${itemName}`);
-            skippedCount++;
-            continue;
-          }
-          
-          // Map completed to bought (true -> 1, false -> 0)
-          const bought = apiItem.completed ? 1 : 0;
-          const quantity = 1; // Default quantity
-          const category = 'Import từ API';
-          
-          // Add to database with bought status from API
-          const success = addItemWithStatus(itemName, quantity, category, bought);
-          
-          if (success) {
-            importedCount++;
-            existingNames.add(normalizedName); // Update set for next iterations
-          }
-        }
-      }
-      
-      // Reload data to show new items
-      loadData();
-      
-      // Show result
-      if (importedCount > 0) {
-        Alert.alert(
-          'Import thành công! 🎉',
-          `Đã thêm ${importedCount} món mới${skippedCount > 0 ? `\nBỏ qua ${skippedCount} món trùng lặp` : ''}`,
-          [{ text: 'OK' }]
-        );
-      } else if (skippedCount > 0) {
-        Alert.alert(
-          'Không có món mới',
-          `Tất cả ${skippedCount} món từ API đã tồn tại trong danh sách`,
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert('Thông báo', 'Không có dữ liệu để import', [{ text: 'OK' }]);
-      }
-      
-    } catch (error) {
-      console.error('❌ Import error:', error);
-      Alert.alert(
-        'Lỗi khi import',
-        `Không thể lấy dữ liệu từ API: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
-        [{ text: 'Đóng' }]
-      );
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  // Component render cho mỗi item
-  const renderItem = ({ item }: { item: GroceryItem }) => (
-    <TouchableOpacity 
-      style={[styles.itemCard, item.bought ? styles.itemCardBought : null]}
-      onPress={() => handleToggleBought(item.id, item.name, item.bought)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.itemHeader}>
-        <Text style={[
-          styles.itemName, 
-          item.bought ? styles.itemNameBought : null
-        ]}>
-          {item.bought ? '✅ ' : ''}{item.name}
-        </Text>
-        <View style={[styles.statusBadge, item.bought ? styles.boughtBadge : styles.notBoughtBadge]}>
-          <Text style={styles.statusText}>
-            {item.bought ? 'Đã mua' : 'Chưa mua'}
-          </Text>
-        </View>
-      </View>
-      
-      <View style={styles.itemDetails}>
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Số lượng:</Text>
-          <Text style={[styles.detailValue, item.bought ? styles.textMuted : null]}>{item.quantity}</Text>
-        </View>
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Danh mục:</Text>
-          <Text style={[styles.detailValue, item.bought ? styles.textMuted : null]}>
-            {item.category || 'Chưa phân loại'}
-          </Text>
-        </View>
-      </View>
-      
-      <View style={styles.itemActions}>
-        <Text style={styles.tapHint}>👆 Chạm để đánh dấu</Text>
-        <View style={styles.buttonGroup}>
-          <TouchableOpacity 
-            style={styles.editButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleOpenEditModal(item);
-            }}
-          >
-            <Text style={styles.editButtonText}>✏️ Sửa</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.deleteButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleDeleteItem(item.id, item.name);
-            }}
-          >
-            <Text style={styles.deleteButtonText}>🗑️ Xóa</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  // Empty state component
-  const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>🛒</Text>
-      <Text style={styles.emptyTitle}>Danh sách trống</Text>
-      <Text style={styles.emptyMessage}>Thêm món cần mua nhé!</Text>
-    </View>
-  );
-
-  // Header component
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <Text style={styles.title}>🛒 Grocery App</Text>
-      <Text style={styles.subtitle}>Câu 9: Fetch API & Đồng bộ "Import once"</Text>
-
-      {/* Import from API Button */}
-      <TouchableOpacity 
-        style={[styles.importButton, importing && styles.importButtonDisabled]}
-        onPress={handleImportFromAPI}
-        disabled={importing}
-        activeOpacity={0.7}
-      >
-        {importing ? (
-          <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
-        ) : (
-          <Text style={styles.importButtonIcon}>🌐</Text>
-        )}
-        <Text style={styles.importButtonText}>
-          {importing ? 'Đang import...' : 'Import từ API'}
-        </Text>
-      </TouchableOpacity>
-
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <Text style={styles.searchIcon}>🔍</Text>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Tìm kiếm theo tên hoặc loại..."
-          placeholderTextColor="#999"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity 
-            onPress={() => setSearchQuery('')}
-            style={styles.clearButton}
-          >
-            <Text style={styles.clearButtonText}>✕</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Search Results Counter */}
-      {searchQuery.length > 0 && (
-        <Text style={styles.searchResultText}>
-          Tìm thấy {filteredItems.length} kết quả
-        </Text>
-      )}
-
-      <Text style={styles.itemCount}>
-        {filteredItems.length > 0 ? `Có ${filteredItems.length} món` : 'Chưa có món nào'}
-      </Text>
-    </View>
-  );
 
   return (
     <View style={styles.container}>
       <FlatList
         data={filteredItems}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id.toString()}
-        ListHeaderComponent={renderHeader}
-        ListEmptyComponent={() => (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>{searchQuery ? '🔍' : '🛒'}</Text>
-            <Text style={styles.emptyTitle}>
-              {searchQuery ? 'Không tìm thấy kết quả' : 'Danh sách trống'}
-            </Text>
-            <Text style={styles.emptyMessage}>
-              {searchQuery ? `Không có món nào chứa "${searchQuery}"` : 'Thêm món cần mua nhé!'}
-            </Text>
-          </View>
+        renderItem={({ item }) => (
+          <GroceryItem
+            item={item}
+            onToggleBought={handleToggleBought}
+            onEdit={handleOpenEditModal}
+            onDelete={handleDeleteItem}
+          />
         )}
+        keyExtractor={(item) => item.id.toString()}
+        ListHeaderComponent={() => (
+          <ListHeader
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            importing={importing}
+            filteredItemsCount={filteredItems.length}
+            onImport={handleImportFromAPI}
+          />
+        )}
+        ListEmptyComponent={() => <EmptyState searchQuery={searchQuery} />}
         contentContainerStyle={styles.listContent}
         refreshing={refreshing}
         onRefresh={onRefresh}
@@ -437,168 +154,43 @@ export default function Index() {
 
       {/* Floating Add Button */}
       <TouchableOpacity 
-        style={styles.fabButton}
+        style={[styles.fabButton, importing && styles.fabButtonDisabled]}
         onPress={handleOpenModal}
+        disabled={importing}
         activeOpacity={0.8}
       >
         <Text style={styles.fabButtonText}>+</Text>
       </TouchableOpacity>
 
       {/* Add Item Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
+      <AddItemModal
         visible={modalVisible}
-        onRequestClose={handleCloseModal}
-      >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              {/* Modal Header */}
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>➕ Thêm món mới</Text>
-                <TouchableOpacity onPress={handleCloseModal}>
-                  <Text style={styles.closeButton}>×</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Form Fields */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Tên món <Text style={styles.required}>*</Text></Text>
-                <TextInput
-                  style={[styles.input, nameError ? styles.inputError : null]}
-                  placeholder="Ví dụ: Sữa, Trứng, Bánh mì..."
-                  value={newItemName}
-                  onChangeText={(text) => {
-                    setNewItemName(text);
-                    if (nameError) setNameError('');
-                  }}
-                  autoFocus
-                />
-                {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Số lượng</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="1"
-                  value={newItemQuantity}
-                  onChangeText={setNewItemQuantity}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Danh mục (tùy chọn)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ví dụ: Thực phẩm, Đồ uống..."
-                  value={newItemCategory}
-                  onChangeText={setNewItemCategory}
-                />
-              </View>
-
-              {/* Action Buttons */}
-              <View style={styles.modalActions}>
-                <TouchableOpacity 
-                  style={[styles.button, styles.cancelButton]}
-                  onPress={handleCloseModal}
-                >
-                  <Text style={styles.cancelButtonText}>Hủy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.button, styles.saveButton]}
-                  onPress={handleAddItem}
-                >
-                  <Text style={styles.saveButtonText}>Lưu</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        onClose={handleCloseModal}
+        onSave={handleAddItem}
+        itemName={newItemName}
+        setItemName={setNewItemName}
+        itemQuantity={newItemQuantity}
+        setItemQuantity={setNewItemQuantity}
+        itemCategory={newItemCategory}
+        setItemCategory={setNewItemCategory}
+        nameError={nameError}
+        setNameError={setNameError}
+      />
 
       {/* Edit Item Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
+      <EditItemModal
         visible={editModalVisible}
-        onRequestClose={handleCloseEditModal}
-      >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              {/* Modal Header */}
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>✏️ Sửa món</Text>
-                <TouchableOpacity onPress={handleCloseEditModal}>
-                  <Text style={styles.closeButton}>×</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Form Fields */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Tên món <Text style={styles.required}>*</Text></Text>
-                <TextInput
-                  style={[styles.input, editNameError ? styles.inputError : null]}
-                  placeholder="Ví dụ: Sữa, Trứng, Bánh mì..."
-                  value={editItemName}
-                  onChangeText={(text) => {
-                    setEditItemName(text);
-                    if (editNameError) setEditNameError('');
-                  }}
-                  autoFocus
-                />
-                {editNameError ? <Text style={styles.errorText}>{editNameError}</Text> : null}
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Số lượng</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="1"
-                  value={editItemQuantity}
-                  onChangeText={setEditItemQuantity}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Danh mục (tùy chọn)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ví dụ: Thực phẩm, Đồ uống..."
-                  value={editItemCategory}
-                  onChangeText={setEditItemCategory}
-                />
-              </View>
-
-              {/* Action Buttons */}
-              <View style={styles.modalActions}>
-                <TouchableOpacity 
-                  style={[styles.button, styles.cancelButton]}
-                  onPress={handleCloseEditModal}
-                >
-                  <Text style={styles.cancelButtonText}>Hủy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.button, styles.saveButton]}
-                  onPress={handleUpdateItem}
-                >
-                  <Text style={styles.saveButtonText}>Cập nhật</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        onClose={handleCloseEditModal}
+        onSave={handleUpdateItem}
+        itemName={editItemName}
+        setItemName={setEditItemName}
+        itemQuantity={editItemQuantity}
+        setItemQuantity={setEditItemQuantity}
+        itemCategory={editItemCategory}
+        setItemCategory={setEditItemCategory}
+        nameError={editNameError}
+        setNameError={setEditNameError}
+      />
     </View>
   );
 }
@@ -813,21 +405,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyIconWrapper: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   emptyIcon: {
-    fontSize: 80,
-    marginBottom: 16,
+    fontSize: 64,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 12,
+    textAlign: 'center',
   },
   emptyMessage: {
     fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  emptyHint: {
+    fontSize: 14,
     color: '#999',
     textAlign: 'center',
+    marginTop: 20,
+    fontStyle: 'italic',
+    lineHeight: 20,
   },
   // Floating Action Button
   fabButton: {
@@ -850,6 +466,10 @@ const styles = StyleSheet.create({
     fontSize: 32,
     color: 'white',
     fontWeight: 'bold',
+  },
+  fabButtonDisabled: {
+    backgroundColor: '#BDBDBD',
+    opacity: 0.6,
   },
   // Modal Styles
   modalOverlay: {
