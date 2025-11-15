@@ -170,6 +170,27 @@ export const addItem = (name: string, quantity: number = 1, category: string = '
 };
 
 /**
+ * Hàm toggle trạng thái bought của item (0 <-> 1)
+ */
+export const toggleItemBought = (id: number): boolean => {
+  try {
+    const stmt = db.prepareSync(
+      'UPDATE grocery_items SET bought = CASE WHEN bought = 0 THEN 1 ELSE 0 END WHERE id = ?;'
+    );
+    try {
+      stmt.executeSync([id]);
+      console.log(`✅ Đã toggle trạng thái item id: ${id}`);
+      return true;
+    } finally {
+      stmt.finalizeSync();
+    }
+  } catch (error) {
+    console.error('❌ Error toggling item:', error);
+    return false;
+  }
+};
+
+/**
  * Hàm xóa tất cả items (chỉ dùng cho testing)
  */
 export const clearAllItems = () => {

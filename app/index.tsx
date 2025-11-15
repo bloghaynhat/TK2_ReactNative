@@ -1,16 +1,16 @@
-import { getAllItems, addItem, type GroceryItem } from "@/service/db";
+import { addItem, getAllItems, toggleItemBought, type GroceryItem } from "@/service/db";
 import { useEffect, useState } from "react";
-import { 
-  FlatList, 
-  StyleSheet, 
-  Text, 
-  View, 
-  TouchableOpacity, 
-  Modal, 
-  TextInput, 
+import {
   Alert,
+  FlatList,
   KeyboardAvoidingView,
-  Platform
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 
 export default function Index() {
@@ -81,18 +81,40 @@ export default function Index() {
     setNameError('');
   };
 
+  const handleToggleBought = (id: number, name: string, currentBought: number) => {
+    const success = toggleItemBought(id);
+    if (success) {
+      // Cập nhật state ngay lập tức để UI mượt mà
+      setItems(prevItems => 
+        prevItems.map(item => 
+          item.id === id ? { ...item, bought: item.bought === 0 ? 1 : 0 } : item
+        )
+      );
+      console.log(`🔄 Toggle ${name}: ${currentBought === 0 ? 'Chưa mua → Đã mua' : 'Đã mua → Chưa mua'}`);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
 
   // Component render cho mỗi item
   const renderItem = ({ item }: { item: GroceryItem }) => (
-    <View style={styles.itemCard}>
+    <TouchableOpacity 
+      style={[styles.itemCard, item.bought ? styles.itemCardBought : null]}
+      onPress={() => handleToggleBought(item.id, item.name, item.bought)}
+      activeOpacity={0.7}
+    >
       <View style={styles.itemHeader}>
-        <Text style={styles.itemName}>{item.name}</Text>
+        <Text style={[
+          styles.itemName, 
+          item.bought ? styles.itemNameBought : null
+        ]}>
+          {item.bought ? '✅ ' : ''}{item.name}
+        </Text>
         <View style={[styles.statusBadge, item.bought ? styles.boughtBadge : styles.notBoughtBadge]}>
           <Text style={styles.statusText}>
-            {item.bought ? '✅ Đã mua' : '⬜ Chưa mua'}
+            {item.bought ? 'Đã mua' : 'Chưa mua'}
           </Text>
         </View>
       </View>
@@ -100,14 +122,18 @@ export default function Index() {
       <View style={styles.itemDetails}>
         <View style={styles.detailItem}>
           <Text style={styles.detailLabel}>Số lượng:</Text>
-          <Text style={styles.detailValue}>{item.quantity}</Text>
+          <Text style={[styles.detailValue, item.bought ? styles.textMuted : null]}>{item.quantity}</Text>
         </View>
         <View style={styles.detailItem}>
           <Text style={styles.detailLabel}>Danh mục:</Text>
-          <Text style={styles.detailValue}>{item.category || 'Chưa phân loại'}</Text>
+          <Text style={[styles.detailValue, item.bought ? styles.textMuted : null]}>
+            {item.category || 'Chưa phân loại'}
+          </Text>
         </View>
       </View>
-    </View>
+      
+      <Text style={styles.tapHint}>👆 Chạm để đánh dấu</Text>
+    </TouchableOpacity>
   );
 
   // Empty state component
@@ -123,7 +149,7 @@ export default function Index() {
   const renderHeader = () => (
     <View style={styles.header}>
       <Text style={styles.title}>🛒 Grocery App</Text>
-      <Text style={styles.subtitle}>Câu 4: Thêm mới bằng Modal</Text>
+      <Text style={styles.subtitle}>Câu 5: Đánh dấu đã mua (Toggle)</Text>
       <Text style={styles.itemCount}>
         {items.length > 0 ? `Có ${items.length} món cần mua` : 'Chưa có món nào'}
       </Text>
@@ -275,6 +301,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  itemCardBought: {
+    backgroundColor: '#f0f0f0',
+    opacity: 0.8,
+  },
   itemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -286,6 +316,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     flex: 1,
+  },
+  itemNameBought: {
+    textDecorationLine: 'line-through',
+    color: '#999',
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -319,6 +353,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+  },
+  textMuted: {
+    color: '#999',
+  },
+  tapHint: {
+    fontSize: 11,
+    color: '#bbb',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   // Empty State Styles
   emptyContainer: {
